@@ -12,7 +12,7 @@ const MAX_RETRIES = 5;
 // -- Proxy Ayrıştırma Ve Temizleme Fonksiyonu ------------------------------
 function parseProxies(envVal) {
   if (!envVal || !envVal.trim()) return [];
-  
+
   return envVal
     .split(/[\s,]+/)
     .map((p) => p.trim().replace(/\/+$/, ""))
@@ -23,16 +23,46 @@ const ENV_PROXIES = parseProxies(process.env.PROXY_BASE);
 
 // Yedek liste
 const FALLBACK_PROXIES = [
+  "https://1.vavturktv.workers.dev",
+  "https://2.vavturktv.workers.dev",
+  "https://3.vavturktv.workers.dev",
+  "https://4.vavturktv.workers.dev",
+  "https://5.vavturktv.workers.dev",
+  "https://6.vavturktv.workers.dev",
+  "https://7.vavturktv.workers.dev",
+  "https://8.vavturktv.workers.dev",
+  "https://9.vavturktv.workers.dev",
+  "https://10.vavturktv.workers.dev",
+  "https://11.vavturktv.workers.dev",
+  "https://12.vavturktv.workers.dev",
+  "https://13.vavturktv.workers.dev",
+  "https://14.vavturktv.workers.dev",
+  "https://15.vavturktv.workers.dev",
+  "https://16.vavturktv.workers.dev",
+  "https://17.vavturktv.workers.dev",
+  "https://18.vavturktv.workers.dev",
+  "https://19.vavturktv.workers.dev",
+  "https://20.vavturktv.workers.dev",
+  "https://21.vavturktv.workers.dev",
+  "https://22.vavturktv.workers.dev",
+  "https://23.vavturktv.workers.dev",
+  "https://24.vavturktv.workers.dev",
+  "https://25.vavturktv.workers.dev",
+  "https://nur.bilalkamera20.workers.dev",
   "https://halil.bilalkamera20.workers.dev",
   "https://adam.bilalkamera20.workers.dev",
-  "https://ner.bilalkamera20.workers.dev",
-  "https://nur.bilalkamera20.workers.dev",
-  "https://vavoo-iptv-proxy.bilalkamera20.workers.dev",
-  "https://nernur.bilalkamera20.workers.dev",
-  "https://balkica.bilalkamera20.workers.dev",
   "https://bilal.bilalkamera20.workers.dev",
+  "https://balkica.bilalkamera20.workers.dev",
+  "https://hmeb.bilalkamera20.workers.dev",
+  "https://nernur.bilalkamera20.workers.dev",
   "https://vav20.bilalkamera20.workers.dev",
-  "https://hmeb.bilalkamera20.workers.dev"
+  "https://vavoo-iptv-proxy.bilalkamera20.workers.dev",
+  "https://yaren.bilalkamera20.workers.dev",
+  "https://denem.bilalkamera20.workers.dev",
+  "https://20.bilalkamera20.workers.dev",
+  "https://yw.bilalkamera20.workers.dev",
+  "https://fb.bilalkamera20.workers.dev",
+  "https://ner.bilalkamera20.workers.dev"
 ];
 
 const PROXY_LIST = ENV_PROXIES.length > 0 ? ENV_PROXIES : FALLBACK_PROXIES;
@@ -160,19 +190,26 @@ function cleanChannelName(name) {
 function normalizeForCategory(name) {
   let s = cleanChannelName(name);
 
-  const search = [
-    /\bT RK\b/gu, /\bT RKIYEM\b/gu, /\bBENG\b/gu, /\bBENGT\b/gu, /\bAK T\b/gu, 
-    /\bS NEMA\b/gu, /\bM N KA\b/gu, /\bOCUK\b/gu, /\bM Z K\b/gu, /\bS ZC\b/gu, 
-    /\bSZC\b/gu, /\bLKE\b/gu, /\bYE IL AM\b/gu, /\bYE IL[ ]?CAM\b/gu, /\bT[ÜU]RK\b/gui
-  ];
-  const replace = [
-    'TURK', 'TURKIYEM', 'BENGU', 'BENGUT', 'AKIT', 
-    'SINEMA', 'MINIKA', 'COCUK', 'MUZIK', 'SOZCU', 
-    'SOZCU', 'ULKE', 'YESILCAM', 'YESILCAM', 'TURK'
+  const replacements = [
+    [/\bT RK\b/gi, "TURK"],
+    [/\bT RKIYEM\b/gi, "TURKIYEM"],
+    [/\bBENG\b/gi, "BENGU"],
+    [/\bBENGT\b/gi, "BENGUT"],
+    [/\bAK T\b/gi, "AKIT"],
+    [/\bS NEMA\b/gi, "SINEMA"],
+    [/\bM N KA\b/gi, "MINIKA"],
+    [/\bOCUK\b/gi, "COCUK"],
+    [/\bM Z K\b/gi, "MUZIK"],
+    [/\bS ZC\b/gi, "SOZCU"],
+    [/\bSZC\b/gi, "SOZCU"],
+    [/\bLKE\b/gi, "ULKE"],
+    [/\bYE IL AM\b/gi, "YESILCAM"],
+    [/\bYE IL[ ]?CAM\b/gi, "YESILCAM"],
+    [/\bT[ÜU]RK\b/gi, "TURK"]
   ];
 
-  for (let i = 0; i < search.length; i++) {
-    s = s.replace(search[i], replace[i]);
+  for (const [pattern, repl] of replacements) {
+    s = s.replace(pattern, repl);
   }
 
   return s;
@@ -193,7 +230,7 @@ const CATEGORY_RULES = [
   },
   {
     name: "TR Spor",
-    re: /BEIN SPO[RT]{0,3}S?|\bBEIN 1\b|S[- ]?SPORTS?|\bS SPORT\b|SPOR SMART|EUROSPORT|\bNBA\b|TJK TV|TIVIBU ?SPOR|TIVIBUSPOR|TRT SPOR|TABII SPOR|EXXEN SPO[RT]?|\bHT SPOR\b|EKOL SPOR|SPORTS TV|IDMAN TV|GALATASARAY TV|\bFB TV\b|\bGS TV\b|SARAN SPORT|SMART SPOR|\bSPOR\b|\bSPORT\b/i,
+    re: /BEIN SPO[RT]{0,3}S?(?!\s*HABER)|\bBEIN 1\b|S[- ]?SPORTS?|\bS SPORT\b|SPOR SMART|EUROSPORT|\bNBA\b|TJK TV|TIVIBU ?SPOR|TIVIBUSPOR|TRT SPOR|TABII SPOR|EXXEN SPO[RT]?|\bHT SPOR\b|EKOL SPOR|SPORTS TV|IDMAN TV|GALATASARAY TV|\bFB TV\b|\bGS TV\b|SARAN SPORT|SMART SPOR|\bSPOR\b|\bSPORT\b/i,
   },
   {
     name: "TR Film",
@@ -221,7 +258,7 @@ const CATEGORY_RULES = [
   },
   {
     name: "TR Ulusal",
-    re: /^24$|\bTRT\b|\bTRT 1\b|\bTRT ?2\b|TRT2|\bTRT 3\b|TRT AVAZ|TRT T[UÜ]RK|TRT TURK|TRT KURD[İI]?|TRT WORLD|TRT 4K|TRT EBA|\bKANAL D\b|\bATV\b|ATV AVRUPA|ATV EUROPA|STAR TV|\bSTAR\b|STAR HD|SHOW TV|SHOW T[UÜ]RK|\bSHOW\b|\bFOX\b|NOW ?TV|\bNOW\b|TV ?8|TV8[.,]5|BEYAZ TV|BEYAZ HD|\bBEYAZ\b|\b360\b|24 TV|\bA2\b|A HABER|A NEWS|A PARA|A SPOR|TV ?100|TV ?4|FLASH TV|TEVE ?2|TEVE2|CNN T[UÜ]RK|CNN TURK|\bKRT\b|ULUSAL KANAL|DREAM T[UÜ]RK|DREAM TURK|\bDREAM TV\b|\bBRT ?[0-9]|\bBRTV\b|EURO ?D|EURO ?STAR|\bNTV\b|EXXEN TV|TIVI ?T[UÜ]RK|TABII|OLAY T[UÜ]RK|OLAY TURK|24 HD|24 HABER|24 KITCHEN|LKE ?TV|[UÜ]LKE ?TV|ULKE ?TV|ULKETV|TV DEN|TVDEN|KANAL AVRUPA|KANAL 7 (?:AVRUPA|EUROPA)|LKE TV|EURO D|EURO STAR|SHOW TV EUROPA|BENGU ?T[UÜ]RK|BENGU TURK|BENGUTURK|TGRT EU|D ?[ĞG] ?N TV|\bTBMM\b|TV NET|\bTV 1\b|TVO TV|BEIN IZ|\bMAX\b/i,
+    re: /^24$|\bTRT\b|\bTRT 1\b|\bTRT ?2\b|TRT2|\bTRT 3\b|TRT AVAZ|TRT T[UÜ]RK|TRT TURK|TRT KURD[İI]?|TRT WORLD|TRT 4K|TRT EBA|\bKANAL D\b|\bATV\b|ATV AVRUPA|ATV EUROPA|STAR TV|\bSTAR\b|STAR HD|SHOW TV|SHOW T[UÜ]RK|\bSHOW\b|\bFOX\b|NOW ?TV|\bNOW\b|TV ?8|TV8[.,]5|BEYAZ TV|BEYAZ HD|\bBEYAZ\b|\b360\b|24 TV|\bA2\b|A HABER|A NEWS|A PARA|A SPOR|TV ?100|TV ?4|FLASH TV|TEVE ?2|TEVE2|CNN T[UÜ]RK|CNN TURK|\bKRT\b|ULUSAL KANAL|DREAM T[UÜ]RK|DREAM TURK|\bDREAM TV\b|\bBRT ?[0-9]+\b|\bBRTV\b|EURO ?D|EURO ?STAR|\bNTV\b|EXXEN TV|TIVI ?T[UÜ]RK|TABII|OLAY T[UÜ]RK|OLAY TURK|24 HD|24 HABER|24 KITCHEN|LKE ?TV|[UÜ]LKE ?TV|ULKE ?TV|ULKETV|TV DEN|TVDEN|KANAL AVRUPA|KANAL 7 (?:AVRUPA|EUROPA)|LKE TV|EURO D|EURO STAR|SHOW TV EUROPA|BENGU ?T[UÜ]RK|BENGU TURK|BENGUTURK|TGRT EU|D ?[ĞG] ?N TV|\bTBMM\b|TV NET|\bTV 1\b|TVO TV|BEIN IZ|\bMAX\b/i,
   },
   {
     name: "TR Yerel",
@@ -248,10 +285,11 @@ function toStreamUrl(item) {
   if (!vavooId) return "";
 
   const targetUrl = `https://vavoo.to/vavoo-iptv/play/${vavooId}`;
+  const numProxies = PROXY_LIST.length;
 
-  if (PROXY_LIST.length > 0) {
-    const currentProxy = PROXY_LIST[proxyIndex];
-    proxyIndex = (proxyIndex + 1) % PROXY_LIST.length;
+  if (numProxies > 0) {
+    const currentProxy = PROXY_LIST[proxyIndex % numProxies];
+    proxyIndex = (proxyIndex + 1) % numProxies;
 
     return `${currentProxy}/?url=${encodeURIComponent(targetUrl)}&master&transport=http&.m3u8`;
   }
@@ -279,6 +317,7 @@ function toM3U(items) {
     const cleanName = cleanChannelName(rawName);
     if (!cleanName) continue;
 
+    const vavooId = it.ids?.id || it.id || "";
     const logo = it.logo ? ` tvg-logo="${escapeAttr(it.logo)}"` : "";
     const rawGroup = it.group ?? "";
     const group = (rawGroup.toLowerCase() === "turkey" || !rawGroup) 
@@ -289,7 +328,7 @@ function toM3U(items) {
     if (!streamUrl) continue;
 
     lines.push(
-      `#EXTINF:-1 group-title="${escapeAttr(group)}"${logo},${cleanName}`
+      `#EXTINF:-1 tvg-id="${escapeAttr(vavooId)}" tvg-name="${escapeAttr(cleanName)}" group-title="${escapeAttr(group)}"${logo},${cleanName}`
     );
     lines.push(streamUrl);
   }
