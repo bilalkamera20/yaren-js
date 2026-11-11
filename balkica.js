@@ -1,359 +1,342 @@
-"use strict";
+const fs = require('fs');
+const crypto = require('crypto');
+const axios = require('axios');
 
-const fs = require("node:fs/promises");
-const path = require("node:path");
+// ============================================================
+//  SABİTLER VE PROXY TANIMLARI
+// ============================================================
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36';
+const CLIENT_VERSION = '3.1.4';
+const CATALOG_URL = 'https://vavoo.to/mediahubmx-catalog.json';
+const OUTPUT_FILE = 'nernur.txt';
 
-const CATALOG_URL = "https://vavoo.to/vto-cluster/mediahubmx-catalog.json";
-const GROUP = "Turkey";
-const M3U_FILE = path.join(__dirname, "nernur.txt");
-const FETCH_TIMEOUT_MS = 20000;
-const MAX_RETRIES = 5;
-
-// -- Proxy Ayrıştırma Ve Temizleme Fonksiyonu ------------------------------
-function parseProxies(envVal) {
-  if (!envVal || !envVal.trim()) return [];
-
-  return envVal
-    .split(/[\s,]+/)
-    .map((p) => p.trim().replace(/\/+$/, ""))
-    .filter((p) => p.startsWith("http://") || p.startsWith("https://"));
-}
-
-const ENV_PROXIES = parseProxies(process.env.PROXY_BASE);
-
-// Yedek liste
+// Gelişmiş Yedekli Worker Proxy Havuzu
 const FALLBACK_PROXIES = [
-  "https://1.vavturktv.workers.dev",
-  "https://2.vavturktv.workers.dev",
-  "https://3.vavturktv.workers.dev",
-  "https://4.vavturktv.workers.dev",
-  "https://5.vavturktv.workers.dev",
-  "https://6.vavturktv.workers.dev",
-  "https://7.vavturktv.workers.dev",
-  "https://8.vavturktv.workers.dev",
-  "https://9.vavturktv.workers.dev",
-  "https://10.vavturktv.workers.dev",
-  "https://11.vavturktv.workers.dev",
-  "https://12.vavturktv.workers.dev",
-  "https://13.vavturktv.workers.dev",
-  "https://14.vavturktv.workers.dev",
-  "https://15.vavturktv.workers.dev",
-  "https://16.vavturktv.workers.dev",
-  "https://17.vavturktv.workers.dev",
-  "https://18.vavturktv.workers.dev",
-  "https://19.vavturktv.workers.dev",
-  "https://20.vavturktv.workers.dev",
-  "https://21.vavturktv.workers.dev",
-  "https://22.vavturktv.workers.dev",
-  "https://23.vavturktv.workers.dev",
-  "https://24.vavturktv.workers.dev",
-  "https://25.vavturktv.workers.dev",
-  "https://nur.bilalkamera20.workers.dev",
-  "https://halil.bilalkamera20.workers.dev",
-  "https://adam.bilalkamera20.workers.dev",
-  "https://bilal.bilalkamera20.workers.dev",
-  "https://balkica.bilalkamera20.workers.dev",
-  "https://hmeb.bilalkamera20.workers.dev",
-  "https://nernur.bilalkamera20.workers.dev",
-  "https://vav20.bilalkamera20.workers.dev",
-  "https://vavoo-iptv-proxy.bilalkamera20.workers.dev",
-  "https://yaren.bilalkamera20.workers.dev",
-  "https://denem.bilalkamera20.workers.dev",
-  "https://20.bilalkamera20.workers.dev",
-  "https://yw.bilalkamera20.workers.dev",
-  "https://fb.bilalkamera20.workers.dev",
-  "https://ner.bilalkamera20.workers.dev"
+    "https://1.vavturktv.workers.dev",
+    "https://2.vavturktv.workers.dev",
+    "https://3.vavturktv.workers.dev",
+    "https://4.vavturktv.workers.dev",
+    "https://5.vavturktv.workers.dev",
+    "https://6.vavturktv.workers.dev",
+    "https://7.vavturktv.workers.dev",
+    "https://8.vavturktv.workers.dev",
+    "https://9.vavturktv.workers.dev",
+    "https://10.vavturktv.workers.dev",
+    "https://11.vavturktv.workers.dev",
+    "https://12.vavturktv.workers.dev",
+    "https://13.vavturktv.workers.dev",
+    "https://14.vavturktv.workers.dev",
+    "https://15.vavturktv.workers.dev",
+    "https://16.vavturktv.workers.dev",
+    "https://17.vavturktv.workers.dev",
+    "https://18.vavturktv.workers.dev",
+    "https://19.vavturktv.workers.dev",
+    "https://20.vavturktv.workers.dev",
+    "https://21.vavturktv.workers.dev",
+    "https://22.vavturktv.workers.dev",
+    "https://23.vavturktv.workers.dev",
+    "https://24.vavturktv.workers.dev",
+    "https://25.vavturktv.workers.dev",
+    "https://nur.bilalkamera20.workers.dev",
+    "https://halil.bilalkamera20.workers.dev",
+    "https://adam.bilalkamera20.workers.dev",
+    "https://bilal.bilalkamera20.workers.dev",
+    "https://balkica.bilalkamera20.workers.dev",
+    "https://hmeb.bilalkamera20.workers.dev",
+    "https://nernur.bilalkamera20.workers.dev",
+    "https://vav20.bilalkamera20.workers.dev",
+    "https://vavoo-iptv-proxy.bilalkamera20.workers.dev",
+    "https://yaren.bilalkamera20.workers.dev",
+    "https://denem.bilalkamera20.workers.dev",
+    "https://20.bilalkamera20.workers.dev",
+    "https://yw.bilalkamera20.workers.dev",
+    "https://fb.bilalkamera20.workers.dev",
+    "https://ner.bilalkamera20.workers.dev"
 ];
 
-const PROXY_LIST = ENV_PROXIES.length > 0 ? ENV_PROXIES : FALLBACK_PROXIES;
-let proxyIndex = 0;
+const PING_URLS = [
+    'https://www.vypn.net/api/app/ping',
+    'https://www.vavoo.tv/api/app/ping',
+    'https://cache.vypn.net/api/app/ping',
+];
 
-const HEADERS = {
-  "content-type": "application/json; charset=utf-8",
-  accept: "application/json",
-  "user-agent": "MediaHubMX/3.0.2",
-  "x-mediahubmx-signature": "",
-  connection: "keep-alive"
-};
+const DEFAULT_GROUPS = [
+    'Turkey'
+];
 
-function buildBody(cursor) {
-  return JSON.stringify({
-    language: "tr",
-    region: "TR",
-    catalogId: "iptv",
-    id: "iptv",
-    adult: false,
-    search: "",
-    sort: "",
-    filter: { group: GROUP },
-    clientVersion: "3.0.2",
-    cursor: cursor || 0,
-  });
-}
-
-// Timeout kontrolü için güvenli fetch yardımcısı
-async function fetchWithTimeout(url, options, timeoutMs) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    if (error.name === "AbortError") {
-      throw new Error(`Zaman aşımı (${timeoutMs}ms)`);
+// Ortam değişkeninden (ENV) PROXY_BASE değerini al ve ayrıştır
+function parseEnvProxies() {
+    const envProxy = process.env.PROXY_BASE;
+    if (!envProxy) {
+        return [];
     }
-    throw error;
-  }
+    const rawList = envProxy.split(/[,;\r\n]+/);
+    const proxies = [];
+    for (const item of rawList) {
+        const trimmed = item.trim();
+        if (trimmed) {
+            proxies.push(trimmed.replace(/\/+$/, ''));
+        }
+    }
+    return proxies;
 }
 
-async function fetchPage(cursor) {
-  const body = buildBody(cursor);
-  let lastErr;
+const envProxies = parseEnvProxies();
+const workerProxies = envProxies.length > 0 ? envProxies : FALLBACK_PROXIES;
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+// ============================================================
+//  HTTP POST
+// ============================================================
+async function httpPost(url, payload, extraHeaders = {}) {
     try {
-      const res = await fetchWithTimeout(CATALOG_URL, {
-        method: "POST",
-        headers: HEADERS,
-        body,
-      }, FETCH_TIMEOUT_MS);
+        const response = await axios.post(url, payload, {
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                'User-Agent': UA,
+                'Accept': '*/*',
+                ...extraHeaders
+            },
+            timeout: 20000,
+            validateStatus: () => true // Tüm HTTP kodlarını yakalamak için
+        });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-
-      const data = await res.json();
-      if (data && data.error) throw new Error(`Vavoo hatası: ${data.error}`);
-
-      return data;
-    } catch (err) {
-      lastErr = err;
-      const wait = 1000 * attempt;
-      console.warn(
-        `Deneme ${attempt}/${MAX_RETRIES} başarısız (${err.message}). ${wait}ms sonra tekrar deneniyor...`
-      );
-      await new Promise((r) => setTimeout(r, wait));
+        return {
+            ok: response.status >= 200 && response.status < 400,
+            body: response.data,
+            code: response.status,
+            err: null
+        };
+    } catch (error) {
+        return { ok: false, body: null, code: 0, err: error.message };
     }
-  }
-  throw lastErr;
 }
 
-async function fetchAll() {
-  const items = [];
-  let cursor = 0;
-  let page = 0;
-  const MAX_PAGES = 200;
+// ============================================================
+//  TOKEN (İmza Alımı)
+// ============================================================
+async function getSignature() {
+    const uid = crypto.randomBytes(16).toString('hex');
+    const ts = Date.now();
+    const payload = {
+        reason: 'app-focus', locale: 'de', theme: 'dark',
+        metadata: {
+            device:  { type: 'desktop', uniqueId: uid },
+            os:      { name: 'win32', version: 'Windows 10 Pro', abis: ['x64'], host: 'PC' },
+            app:     { platform: 'electron' },
+            version: { package: 'net.vypn.app', binary: '3.1.0', js: '3.1.0' },
+        },
+        appFocusTime: 0, playerActive: false, playDuration: 0,
+        devMode: false, hasAddon: true, castConnected: false,
+        package: 'net.vypn.app', version: '3.1.0', process: 'app',
+        firstAppStart: ts, lastAppStart: ts, ipLocation: null,
+        adblockEnabled: true,
+        proxy: { supported: ['ss'], engine: 'Mu', enabled: false, autoServer: true },
+        iap:   { supported: false },
+    };
 
-  do {
-    page++;
-    const data = await fetchPage(cursor);
-
-    if (Array.isArray(data.items) && data.items.length > 0) {
-      items.push(...data.items);
+    for (const u of PING_URLS) {
+        const r = await httpPost(u, payload);
+        if (r.ok && r.body) {
+            const d = typeof r.body === 'object' ? r.body : JSON.parse(r.body);
+            const sig = d.sig || d.addonSig || d.signature || d.token || null;
+            if (sig) { return sig; }
+        }
     }
-
-    console.log(
-      `Sayfa ${page}: ${data.items?.length ?? 0} kanal çekildi, nextCursor=${data.nextCursor ?? "null"}`
-    );
-
-    cursor = data.nextCursor ?? null;
-
-    if (page >= MAX_PAGES) {
-      console.warn(`Maksimum sayfa sınırına ulaşıldı (${MAX_PAGES}).`);
-      break;
-    }
-  } while (cursor !== null && cursor !== undefined);
-
-  return items;
+    return null;
 }
 
-// -- Kanal İsmi Temizleme ve Kategorilendirme -----------------------------
-
+// ============================================================
+//  TEMİZLEME VE KATEGORİZASYON FONKSİYONLARI
+// ============================================================
 function cleanChannelName(name) {
-  if (!name) return "Bilinmeyen Kanal";
-  let s = String(name);
-  // 1. Baştaki "4K TR:", "TR:", "4K TR :" gibi ifadeleri kaldırır
-  s = s.replace(/^\s*(?:4K\s*)?TR\s*:\s*/i, "");
-  // 2. Sondaki veya kelime aralarındaki .b, .c, .s gibi nokta uzantılarını kaldırır
-  s = s.replace(/\s*\.[bcs]\b/gi, "");
-  // 3. Çözünürlük ve yayın kalitesi etiketlerini temizler
-  s = s.replace(/\s+(?:4K|UHD|FHD|HD\+|HD|SD|HEVC|RAW|H265|H\.265|FEED)(?=\s|$)/gi, "");
-  // 4. Fazla boşlukları temizler
-  s = s.replace(/\s+/g, " ");
-  return s.trim();
+    if (!name) return "Bilinmeyen Kanal";
+
+    let s = String(name);
+    s = s.replace(/^\s*(?:4K\s*)?TR\s*:\s*/i, '');
+    s = s.replace(/\s*\.[bcs]\b/i, '');
+    s = s.replace(/\s+(?:4K|UHD|FHD|HD\+|HD|SD|HEVC|RAW|H265|H\.265|FEED)(?=\s|$)/i, '');
+    s = s.replace(/S\s*[\x00-\x1F\x7F-\xFF\?\s]*NEMA/gi, 'SINEMA');
+    s = s.replace(/DREAM\s*T\s*R\s*K/gi, 'DREAM TURK');
+    s = s.replace(/MINICA/gi, 'MINIKA');
+    s = s.replace(/\s+/g, ' ');
+
+    return s.trim();
 }
 
 function normalizeForCategory(name) {
-  let s = cleanChannelName(name);
+    let s = cleanChannelName(name);
 
-  const replacements = [
-    [/\bT RK\b/gi, "TURK"],
-    [/\bT RKIYEM\b/gi, "TURKIYEM"],
-    [/\bBENG\b/gi, "BENGU"],
-    [/\bBENGT\b/gi, "BENGUT"],
-    [/\bAK T\b/gi, "AKIT"],
-    [/\bS NEMA\b/gi, "SINEMA"],
-    [/\bM N KA\b/gi, "MINIKA"],
-    [/\bOCUK\b/gi, "COCUK"],
-    [/\bM Z K\b/gi, "MUZIK"],
-    [/\bS ZC\b/gi, "SOZCU"],
-    [/\bSZC\b/gi, "SOZCU"],
-    [/\bLKE\b/gi, "ULKE"],
-    [/\bYE IL AM\b/gi, "YESILCAM"],
-    [/\bYE IL[ ]?CAM\b/gi, "YESILCAM"],
-    [/\bT[ÜU]RK\b/gi, "TURK"]
-  ];
+    const charMap = {
+        'Ç': 'C', 'ç': 'c',
+        'Ğ': 'G', 'ğ': 'g',
+        'İ': 'I', 'I': 'I', 'ı': 'i',
+        'Ö': 'O', 'ö': 'o',
+        'Ş': 'S', 'ş': 's',
+        'Ü': 'U', 'ü': 'u'
+    };
+    s = s.replace(/[ÇçĞğİIıÖöŞşÜü]/g, match => charMap[match]);
 
-  for (const [pattern, repl] of replacements) {
-    s = s.replace(pattern, repl);
-  }
+    const search = [/\bT RK\b/gu, /\bT RKIYEM\b/gu, /\bBENG\b/gu, /\bBENGT\b/gu, /\bAK T\b/gu, /\bS\s*NEMA\b/gu, /\bM N KA\b/gu, /\bOCUK\b/gu, /\bM Z K\b/gu, /\bS ZC\b/gu, /\bSZC\b/gu, /\bLKE\b/gu, /\bYE IL AM\b/gu, /\bYE IL[ ]?CAM\b/gu, /\bT[ÜU]RK\b/gi];
+    const replace = ['TURK', 'TURKIYEM', 'BENGU', 'BENGUT', 'AKIT', 'SINEMA', 'MINIKA', 'COCUK', 'MUZIK', 'SOZCU', 'SOZCU', 'ULKE', 'YESILCAM', 'YESILCAM', 'TURK'];
 
-  return s;
+    for (let i = 0; i < search.length; i++) {
+        s = s.replace(search[i], replace[i]);
+    }
+    return s;
 }
 
-const CATEGORY_RULES = [
-  {
-    name: "TR Radyo",
-    re: /\b(RADIO|RADYO)\b|\b(FM|MBAT FM|EFKAR FM|FMTV|F ?M)\b(?!\s*TV)|POWERTURK|POWER FM|SHOW RADYO|ALEM (?:FM|RADYO)|BABA RADYO|KRAL POP RADYO|PAL STATION|X NOSTALJI|RADIO ROCK|STANBUL FM/i,
-  },
-  {
-    name: "TR Çocuk",
-    re: /CARTOON|BOOMERANG|DISNEY|NICK(?:ELODEON|TOONS|JR|JUNIOR|\b)|BABY ?TV|BABYTV|M[İI]?N ?KA|MINIKA|POKEMON|POKÉMON|ANIMATION|ANIMASYON|TRT ?[ÇC]?OCUK|OCUK HD|\bCOCUK\b|\b[ÇC]OCUK\b|BEN ?10|ANGRY BIRDS|CAILLOU|PEPPA|PEPE|HEIDI|SIRINLER|TOM & JERRY|S[ÜU]NGER|SPIDERMAN|BARBIE|PIJAMA|PIRIL|RAFADAN|KELOGLAN|KUKULI|KUKILI|KOSTEBEK|CHICKY|BOOBA|WAKFU|GABBY|TAYO|NILOYA|PISI|LEYLEK|MASAL|CANIM KARDESIM|ADIBESA|MOMO|ALVIN|VIKINGLER|TRANSFORMERS|TROL AVCILARI|SMART COCUK|ILAHI COCUK|CILGIN ORMAN|KRAL SAKIR|SERCE KUS|ITFAYECI SAM|MUFFETIS|MAYMUNLAR|ELIF VE|ELIFIN|MIMOCAN|HAPSUU|RUYA TRENI|MASA KOCAAYI|PAK PIRPIR|LIMON ZEYTIN|GONCA TV|NASREDDIN|SEKER HOCA|SEVIMLI DOSTLAR|PAW PETROL|OSCAR COLLERDE|SL NILOYA|CBEEBIES|DUCK TV|JIM ?JAM|ENGLISH CLUB TV|EBA TV|TAV[SŞ]AN|PATRON BEBEK|D[İI]YARI|BAHA\b|SEF ROKKA|BULMACA KULESI|AKILLI TAV[SŞ]AN|AKLILI|CANIM KARDESIM|DA VINC KIDS|DA VINCI KIDS|DINAMIK ANIMASYON|DREAM ANIMASYON|MAX ANIMASYON|ENO ANIMASYON|BEST ANIMASYON|YILDIZ KIZ|KONU[SŞ]AN TOM|JURASSIC WORLD|MONTAG/i,
-  },
-  {
-    name: "TR Belgesel",
-    re: /DISCOVERY|NATIONAL GEOGRAPHIC|NAT ?GEO|\bHISTORY\b|ANIMAL PLANET|DA VINCI(?! KIDS)|VIASAT|BBC EARTH|LOVE NATURE|TRT BELGESEL|EPIC DRAMA|TARIH TV|TARIM TV|TGRT BELGESEL|INVESTIGATION|DMAX|DOCUBOX|DOCU SCREEN|SCIENCE|\bIZ TV\b|YABAN|OUTDOOR|CHASSE|ANIMAUX|AGRO TV|CIFTCI TV|REDBULL TV|\bTLC\b/i,
-  },
-  {
-    name: "TR Spor",
-    re: /BEIN SPO[RT]{0,3}S?(?!\s*HABER)|\bBEIN 1\b|S[- ]?SPORTS?|\bS SPORT\b|SPOR SMART|EUROSPORT|\bNBA\b|TJK TV|TIVIBU ?SPOR|TIVIBUSPOR|TRT SPOR|TABII SPOR|EXXEN SPO[RT]?|\bHT SPOR\b|EKOL SPOR|SPORTS TV|IDMAN TV|GALATASARAY TV|\bFB TV\b|\bGS TV\b|SARAN SPORT|SMART SPOR|\bSPOR\b|\bSPORT\b/i,
-  },
-  {
-    name: "TR Film",
-    re: /SINEMA|S[İI]NEMA|S NEMA|CINEMA|SINEMAX|SINEVIZYON|\bMOVIES?\b|MOVIEMAX|MOVIESMART|BEIN MOVIES|BEIN BOX|BOX OFFICE|\bFX\b|FX HD|YESILCAM|YE ?I ?L ?[ÇC] ?AM|YE ?I ?L ?AM|YEŞ?[İI]LC?AM|GLOBAL BOX|PROTURK|FIX CINEMA|KINGBOX|ARENA BOX|SHOWMAX|SHOW MAX|REAL BOX|SMART BOX|BEST (?:AKSIYON|BILIMKURGU|DRAM|HABABAM|IMBD|KOMEDI|KORKU|LOCA|NETFLIX|SALON|SAVAS|TURK|WESTERN|YESILCAM)|MAX (?:007|AKSIYON|GOLD|ORJINAL|PREMIER|STAR WARS|TURK|VIZYON|WESTERN)|DINAMIK (?:AKSIYON|BILIMKURGU|DRAM|IMBD|KOMEDI|KORKU|TURK|VIZYON|WESTERN|YESILCAM)|DREAM (?:AKSIYON|BEIN OFFICE|BOX|DRAM|KEMAL|KOMEDI|KORKU|LOCA|NETFLIX|SAVAS|WESTERN)|ULTRA (?:AKSIYON|BILIMKURGU|IMBD|KEMAL|KOMEDI|KORKU|TURK)|ENO (?:AKSIYON|VIZYON|WESTERN)|\bLOCA\b|\bSALON\b|\bVIZYON\b|AKSIYON|AKS[İIY]?YON|AKS YON|KOMED[İI]|\bKORKU\b|\bDRAM\b|WESTERN|BILIM ?KURGU|\bSAVAS\b|\bIMBD\b|\bIMDB\b|\bFILM\b|FILMBOX|HORROR|OSCAR|KEMAL SUNAL|\b007\b|\bCINE ?1\b|SIFIR TV|SON C BOOM|\bYERL[İI]\b|SPIDERMAN(?! TV)|ARENA BOX|MOVIE SMART|\bM ?T[UÜ]RK TV\b|\bM TURK TV\b|\bM T RK TV\b/i,
-  },
-  {
-    name: "TR Dizi",
-    re: /SER[İI]ES|\bDIZI\b|BEIN SERIES|D[İI]Z[İI] ?SMART|DIZISMART/i,
-  },
-  {
-    name: "TR Müzik",
-    re: /POWER T[UÜ]RK|POWER ?TV|POWERTURK|POWER (?:DANCE|LOVE|HD)|\bPOWER\b|KRAL POP|KRAL ?TV|\bKRAL\b|TRT M[UÜ]?Z[İI]?K|TRT MUZIK|NR ?1|NUMBER ?1|NUMBER ONE|DAMAR|ARABESK|AKUS ?T[İI]K|AHMET KAYA|IBRAHIM ERKAL|IBRAHIM TATLISES|\bTATLISES\b|ZERRIN OZER|SEZEN AKSU|TARKAN|SELDA BAGCAN|CENGIZ KURTOGLU|MAHSUN KIRMIZIGUL|MUSLUM GURSES|YILDIZ TILBE|FERDI TAYFUR|DURSUN AL|MTV LIVE|VINTAGE MUSIC|RETRO T ?RK|RETRO TURK|T[UÜ]?RK ?E POP|T RK E POP|T RK E KLASIK|SLOW KARADENIZ|\bSLOW\b|\bZARA\b|\bSONER ARICA\b|M[UÜ]Z[İI]K|\bFM TV\b|\bFMTV\b|REDBOX/i,
-  },
-  {
-    name: "TR Haber",
-    re: /\bHABER\b|\bNEWS\b|BLOOMBERG|\bCNN\b|EKOTURK|\bEKO ?T[UÜ]RK\b|\bEKOL\b|A ?PARA|APARA|PARANIN|HALK TV|TELE ?1|SOZCU|S ZC|\bSZC\b|BENGU ?T[UÜ]RK|BENGUTURK|TRT WORLD|\bDHA\b|LIDER HABER|FLASH HABER|MEDYA HABER|GLOBAL HABER|TRABZON HABER|BEIN SPORTS HABER|T[UÜ]RKHABER|HABERT[UÜ]RK|HABERT RK|\bARTI TV\b/i,
-  },
-  {
-    name: "TR Dini",
-    re: /D[İI]YANET|\bAK[İIY]?T\b|MEHTAP|H[İI]LAL|KUDUS|KUDÜS|KUD S|SEMERKAND|LALEGUL|LÂLEGÜL|L[AÂ]LEG[UÜ]L|MERCAN TV|VUSLAT|KARDELEN|DIYAR TV|\bDOST TV\b|\bYOL TV\b|\bKANAL 7\b|HAYAT|HAYIRLI|HZ MERYEM|HZ OMER|HZ YUSUF|MAM EBU|ASHABI KEHF|HASAN VE HUSEYIN|SAT ?7 T[UÜ]RK|TVNET|TRT DIYANET|\bTV ?5\b|\bTV5\b|REHBER|ILAHI|ILKE TV|MESAJ TV|SURELER|T[UÜ]RK ?E MEAL|DURSUN AL ERZINCANLI|YUNUS EMRE|CEM TV|BARBAROS TV|ASLAN TV|TYT TURK|SATRAN[ÇC]|FASIL/i,
-  },
-  {
-    name: "TR Yaşam",
-    re: /24 KITCHEN|GURME|BEIN GURME|LIFESTYLE|\bLIFE TV\b|FASHION|WM TV|EGE ILE GAGA|24 RAW|\bTVEM\b|\bTV EM\b|AUTOMOTO|LINE TV|BILGILENDIRME|WOMAN|TELEGRAM/i,
-  },
-  {
-    name: "TR Ulusal",
-    re: /^24$|\bTRT\b|\bTRT 1\b|\bTRT ?2\b|TRT2|\bTRT 3\b|TRT AVAZ|TRT T[UÜ]RK|TRT TURK|TRT KURD[İI]?|TRT WORLD|TRT 4K|TRT EBA|\bKANAL D\b|\bATV\b|ATV AVRUPA|ATV EUROPA|STAR TV|\bSTAR\b|STAR HD|SHOW TV|SHOW T[UÜ]RK|\bSHOW\b|\bFOX\b|NOW ?TV|\bNOW\b|TV ?8|TV8[.,]5|BEYAZ TV|BEYAZ HD|\bBEYAZ\b|\b360\b|24 TV|\bA2\b|A HABER|A NEWS|A PARA|A SPOR|TV ?100|TV ?4|FLASH TV|TEVE ?2|TEVE2|CNN T[UÜ]RK|CNN TURK|\bKRT\b|ULUSAL KANAL|DREAM T[UÜ]RK|DREAM TURK|\bDREAM TV\b|\bBRT ?[0-9]+\b|\bBRTV\b|EURO ?D|EURO ?STAR|\bNTV\b|EXXEN TV|TIVI ?T[UÜ]RK|TABII|OLAY T[UÜ]RK|OLAY TURK|24 HD|24 HABER|24 KITCHEN|LKE ?TV|[UÜ]LKE ?TV|ULKE ?TV|ULKETV|TV DEN|TVDEN|KANAL AVRUPA|KANAL 7 (?:AVRUPA|EUROPA)|LKE TV|EURO D|EURO STAR|SHOW TV EUROPA|BENGU ?T[UÜ]RK|BENGU TURK|BENGUTURK|TGRT EU|D ?[ĞG] ?N TV|\bTBMM\b|TV NET|\bTV 1\b|TVO TV|BEIN IZ|\bMAX\b/i,
-  },
-  {
-    name: "TR Yerel",
-    re: /ADANA|AD[İI]YAMAN|AFYON|AKSARAY|ALANYA|ANAKKALE|\bANKARA\b|ANKA TV|ANKARA T[UÜ]RKIYEM|ANLIURFA|ANTALYA|\bBURSA\b|ELAZIG|ERCIS|ERZURUM|ESK[İI]SEHIR|ESK EH R|\bES TV\b|\bER TV\b|ETV KAYSERI|ETV MANISA|GAZIANTEP|\bICEL\b|K[İI]MARAS|KAHRAMANMARA|K MARAS|KAYSERI|KOCAELI|KON TV|KONYA|MALATYA|MERSIN|ORDU|ALTAS TV|SIVAS|TRABZON|TUNCELI|DERSIM|\bURFA\b|IZMIR TV|TON TV|KIBRIS|EDIRNE|DENIZLI|\bKAY TV\b|KENT T[UÜ]RK|KENT T RK|HUNAT|\bOBB\b|KANAL 12|KANAL 15|KANAL 23|KANAL 24|KANAL 26|KANAL 3\b|KANAL 32|KANAL 33|KANAL 34|KANAL 360|KANAL 42|KANAL 58|KANAL 68|KANAL FIRAT|KANAL URFA|KANAL V\b|\bKANAL Z\b|KANAL T\b|KANAL HAYAT|KANAL 68|KARADENIZ|GUNEYDOGU|GÜNEYDOĞU|\bEGE\b|MELTEM|CAY TV|TEK RUMEL|YENI KOCAELI|OLAY TV|\bGRT\b|SUN RTV|SUN TV|\bK[ÖO]Y TV\b|IZMIR|TIVI 6|TV 41|TV 42|TV 52|TV 264|KOZA TV|MC EU|MERCAN|KADIRGA|\bFANATIK\b|AS TV|ISVI|GURBET24|T\.A\.Y|TAY TV|\bTAY\b|\bTMB\b|AV TV|MAVI KARADENIZ|EGE ILE GAGA|GAZIANTEP GRT|VIYANA TV|LUYS|EDESSA|BIR TV|ANA[DK]OLU|B[İI]R TV|D[İI]YAR|ERTV|HRT|SIVAS|VIZYON 58|ADA TV|CAN TV|DEHA|SIFIR|EKIN T[UÜ]RK|AFROTURK|ARAS|ARKADAG|VATAN|D[ÖO]RU|AKSU TV|KARE TV|ON 4|ON 6|PAMUKKALE|UCANKUS|64 KARE|DENIZ POSTASI/i,
-  },
-];
+function categorizeChannel(name) {
+    const s = normalizeForCategory(name);
 
-function categorize(name) {
-  const s = normalizeForCategory(name);
-  for (const rule of CATEGORY_RULES) {
-    if (rule.re.test(s)) return rule.name;
-  }
-  return "TR Diğer";
+    if (/KARADENIZ\s*BRT|TRT\s*MUZIK/i.test(s)) {
+        return 'TR Diğer';
+    }
+
+    const rules = {
+        'TR Spor': /BEIN SPO[RT]{0,3}S?|\bBEIN 1\b|S[- ]?SPORTS?|\bS SPORT\b|SPOR SMART|EUROSPORT|\bNBA\b|TJK TV|TIVIBU ?SPOR|TIVIBUSPOR|TRT SPOR|TABII SPOR|EXXEN SPO[RT]?|\bHT SPOR\b|EKOL SPOR|SPORTS TV|IDMAN TV|GALATASARAY TV|\bFB TV\b|\bGS TV\b|SARAN SPORT|SMART SPOR|\bSPOR\b|\bSPORT\b/i,
+        'TR Radyo': /\b(RADIO|RADYO)\b|\b(FM|MBAT FM|EFKAR FM|FMTV|F ?M)\b(?!\s*TV)|POWERTURK|POWER FM|SHOW RADYO|ALEM (?:FM|RADYO)|BABA RADYO|KRAL POP RADYO|PAL STATION|X NOSTALJI|RADIO ROCK|STANBUL FM/i,
+        'TR Çocuk': /CARTOON|BOOMERANG|DISNEY|NICK(?:ELODEON|TOONS|JR|JUNIOR|\b)|BABY ?TV|BABYTV|MINIKA|MINICA|POKEMON|ANIMATION|ANIMASYON|TRT ?COCUK|COCUK HD|\bCOCUK\b|ANKA|BEN ?10|ANGRY BIRDS|CAILLOU|PEPPA|PEPE|HEIDI|SIRINLER|TOM & JERRY|SUNGER|SUNGER\s*BOB|SPIDERMAN|BARBIE|PIJAMA|PIRIL|RAFADAN|KELOGLAN|KUKULI|KUKILI|KOSTEBEK|CHICKY|BOOBA|WAKFU|GABBY|TAYO|NILOYA|PISI|LEYLEK|MASAL|CANIM KARDESIM|ADIBESA|MOMO|ALVIN|VIKINGLER|TRANSFORMERS|TROL AVCILARI|SMART\s*COCUK|COCUK\s*SMART|ILAHI COCUK|CILGIN ORMAN|KRAL SAKIR|SERCE KUS|ITFAYECI SAM|MUFFETIS|MAYMUNLAR|ELIF VE|ELIFIN|MIMOCAN|HAPSUU|RUYA TRENI|MASA KOCAAYI|PAK PIRPIR|LIMON ZEYTIN|GONCA TV|NASREDDIN|SEKER HOCA|SEVIMLI DOSTLAR|PAW PETROL|OSCAR COLLERDE|SL NILOYA|CBEEBIES|DUCK TV|JIM ?JAM|ENGLISH CLUB TV|EBA TV|TAVSAN|PATRON BEBEK|DIYARI|BAHA\b|SEF ROKKA|BULMACA KULESI|AKILLI TAVSAN|AKLILI|DA VINC KIDS|DA VINCI KIDS|DINAMIK ANIMASYON|BEST ANIMASYON|YILDIZ KIZ|KONUSAN TOM|JURASSIC WORLD|MONTAG|64\s*KARE/i,
+        'TR Belgesel': /DISCOVERY|NATIONAL GEOGRAPHIC|NAT ?GEO|\bHISTORY\b|ANIMAL PLANET|DA VINCI(?! KIDS)|VIASAT|BBC EARTH|LOVE NATURE|TRT BELGESEL|EPIC DRAMA|TARIH TV|TARIM TV|TGRT BELGESEL|INVESTIGATION|DMAX|DOCUBOX|DOCU SCREEN|SCIENCE|\bIZ TV\b|YABAN|OUTDOOR|CHASSE|ANIMAUX|AGRO TV|CIFTCI TV|REDBULL TV|\bTLC\b/i,
+        'TR Yaşam': /24 KITCHEN|GURME|BEIN GURME|LIFESTYLE|\bLIFE TV\b|FASHION|WM TV|EGE ILE GAGA|24 RAW|\bTVEM\b|\bTV EM\b|AUTOMOTO|LINE TV|BILGILENDIRME|WOMAN|TELEGRAM/i,
+        'TR Haber': /\b24\s*TV\b|\bTV\s*24\b|\b24\s*HABER\b|^24$|\bHABER\b|\bNEWS\b|BLOOMBERG|\bCNN\b|EKOTURK|\bEKO ?TURK\b|\bEKOL\b|A ?PARA|APARA|PARANIN|HALK TV|TELE ?1|SOZCU|\bSZC\b|BENGU|BENGUTURK|TRT WORLD|TRT HABER|\bDHA\b|LIDER HABER|FLASH|FLASH HABER|MEDYA HABER|GLOBAL HABER|TRABZON HABER|BEIN SPORTS HABER|TURKHABER|HABERTURK|\bARTI TV\b|\bAKIT\b|TVNET|TV NET|MELTEM|A HABER|ULKE|A NEWS|KRT|ULUSAL/i,
+        'TR Film': /DREAM|DINAMIK\s*TURK|SINEMA|CINEMA|SINEMAX|SINEVIZYON|\bMOVIES?\b|MOVIEMAX|MOVIESMART|BEIN MOVIES|BEIN BOX|BOX OFFICE|\bFX\b|FX HD|YESILCAM|GLOBAL BOX|PROTURK|FIX CINEMA|KINGBOX|ARENA BOX|SHOWMAX|SHOW MAX|REAL BOX|SMART BOX|BEST (?:AKSIYON|BILIMKURGU|DRAM|HABABAM|IMBD|KOMEDI|KORKU|LOCA|NETFLIX|SALON|SAVAS|TURK|WESTERN|YESILCAM)|MAX|\bLOCA\b|\bSALON\b|\bVIZYON\b|AKSIYON|KOMEDI|\bKORKU\b|\bDRAM\b|WESTERN|BILIM ?KURGU|\bSAVAS\b|\bIMBD\b|\bIMDB\b|\bFILM\b|FILMBOX|HORROR|OSCAR|KEMAL SUNAL|\b007\b|\bCINE ?1\b|SIFIR TV|SON C BOOM|\bYERLI\b|SPIDERMAN(?! TV)|ARENA BOX|MOVIE SMART|\bMTURK TV\b/i,
+        'TR Ulusal': /\bTRT\b|\bTRT 1\b|\bTRT ?2\b|TRT2|\bTRT 3\b|TRT AVAZ|TRT TURK|TRT KURDI|TRT 4K|TRT EBA|\bKANAL D\b|\bATV\b|ATV AVRUPA|ATV EUROPA|STAR TV|\bSTAR\b|STAR HD|SHOW TV|SHOW TURK|\bSHOW\b|\bFOX\b|NOW ?TV|\bNOW\b|TV ?8|TV8[.,]5|BEYAZ TV|BEYAZ HD|\bBEYAZ\b|\b360\b|\bA2\b|TV ?100|TV ?4|TEVE ?2|TEVE2|CNN TURK|\bBRT ?[0-9]|\bBRTV\b|EURO ?D|EURO ?STAR|\bNTV\b|EXXEN TV|TIVITURK|TABII|OLAY TURK|KANAL AVRUPA|\bKANAL 7\b|KANAL 7 (?:AVRUPA|EUROPA)|EURO D|EURO STAR|SHOW TV EUROPA|TGRT EU|DUGUN TV|\bTBMM\b|\bTV 1\b|TVO TV|BEIN IZ/i,
+        'TR Dizi': /SERIES|\bDIZI\b|BEIN SERIES|DIZISMART/i,
+        'TR Müzik': /POWER TURK|POWER ?TV|POWERTURK|POWER (?:DANCE|LOVE|HD)|\bPOWER\b|KRAL POP|KRAL ?TV|\bKRAL\b|NR ?1|NUMBER ?1|NUMBER ONE|DAMAR|ARABESK|AKUSTIK|AHMET KAYA|IBRAHIM ERKAL|IBRAHIM TATLISES|\bTATLISES\b|ZERRIN OZER|SEZEN AKSU|TARKAN|SELDA BAGCAN|CENGIZ KURTOGLU|MAHSUN KIRMIZIGUL|MUSLUM GURSES|YILDIZ TILBE|FERDI TAYFUR|DURSUN AL|MTV LIVE|VINTAGE MUSIC|RETRO TURK|TURKCE POP|TURKCE KLASIK|SLOW KARADENIZ|\bSLOW\b|\bZARA\b|\bSONER ARICA\b|MUZIK|\bFM TV\b|\bFMTV\b|REDBOX/i,
+        'TR Dini': /DIYANET|MEHTAP|HILAL|KUDUS|SEMERKAND|LALEGUL|MERCAN TV|VUSLAT|KARDELEN|DIYAR TV|\bDOST TV\b|\bYOL TV\b|HAYAT|HAYIRLI|HZ MERYEM|HZ OMER|HZ YUSUF|MAM EBU|ASHABI KEHF|HASAN VE HUSEYIN|SAT ?7 TURK|TRT DIYANET|\bTV ?5\b|\bTV5\b|REHBER|ILAHI|ILKE TV|MESAJ TV|SURELER|TURKCE MEAL|DURSUN AL ERZINCANLI|YUNUS EMRE|CEM TV|BARBAROS TV|ASLAN TV|TYT TURK|SATRANC|FASIL/i,
+        'TR Yerel': /TVDEN|TV DEN|ADANA|ADIYAMAN|AFYON|AKSARAY|ALANYA|ANAKKALE|\bANKARA\b|ANKA TV|ANKARA TURKIYEM|SANLIURFA|ANTALYA|\bBURSA\b|ELAZIG|ERCIS|ERZURUM|ESKISEHIR|\bES TV\b|\bER TV\b|ETV KAYSERI|ETV MANISA|GAZIANTEP|\bICEL\b|KAHRAMANMARAS|KAYSERI|KOCAELI|KON TV|KONYA|MALATYA|MERSIN|ORDU|ALTAS TV|SIVAS|TRABZON|TUNCELI|DERSIM|\bURFA\b|IZMIR TV|TON TV|KIBRIS|EDIRNE|DENIZLI|\bKAY TV\b|KENT TURK|HUNAT|\bOBB\b|KANAL 12|KANAL 15|KANAL 23|KANAL 24|KANAL 26|KANAL 3\b|KANAL 32|KANAL 33|KANAL 34|KANAL 360|KANAL 42|KANAL 58|KANAL 68|KANAL FIRAT|KANAL URFA|KANAL V\b|\bKANAL Z\b|KANAL T\b|KANAL HAYAT|GUNEYDOGU|\bEGE\b|TEK RUMELI|YENI KOCAELI|OLAY TV|\bGRT\b|SUN RTV|SUN TV|\bKOY TV\b|IZMIR|TIVI 6|TV 41|TV 42|TV 52|TV 264|KOZA TV|MC EU|MERCAN|KADIRGA|\bFANATIK\b|AS TV|ISVI|GURBET24|T\.A\.Y|TAY TV|\bTAY\b|\bTMB\b|AV TV|MAVI KARADENIZ|EGE ILE GAGA|GAZIANTEP GRT|VIYANA TV|LUYS|EDESSA|BIR TV|ANADOLU|DIYAR|ERTV|HRT|VIZYON 58|ADA TV|CAN TV|DEHA|SIFIR|EKIN TURK|AFROTURK|ARAS|ARKADAG|VATAN|DORU|AKSU TV|KARE TV|ON 4|ON 6|PAMUKKALE|UCANKUS|DENIZ POSTASI/i
+    };
+
+    for (const [cat, pattern] of Object.entries(rules)) {
+        if (pattern.test(s)) {
+            return cat;
+        }
+    }
+
+    return 'TR Diğer';
 }
 
-// -- M3U Dosyası Oluşturma ------------------------------------------------
+// ============================================================
+//  KATALOG ÇEKME
+// ============================================================
+async function fetchCatalogGroup(group, signature) {
+    let channels = [];
+    let cursor = 0;
 
-function escapeAttr(value) {
-  return String(value ?? "").replace(/\r?\n/g, " ").replace(/"/g, "'");
+    for (let page = 0; page < 15; page++) {
+        const payload = {
+            language: 'tr', region: 'TR', catalogId: 'iptv', id: 'iptv',
+            adult: false, search: '', sort: 'name',
+            filter: { group: group },
+            cursor: cursor, clientVersion: CLIENT_VERSION,
+        };
+
+        const r = await httpPost(CATALOG_URL, payload, { 'mediahubmx-signature': signature });
+        if (!r.ok) break;
+
+        const data = typeof r.body === 'object' ? r.body : JSON.parse(r.body);
+        if (!data || typeof data !== 'object') break;
+
+        const items = data.items || [];
+        if (items.length === 0) break;
+
+        for (const itm of items) {
+            const rawName = itm.name || '';
+            let name = cleanChannelName(rawName);
+            if (!name) name = 'Isimsiz Kanal';
+
+            const resolvedGroup = categorizeChannel(rawName);
+
+            let chid = '';
+            if (itm.ids && typeof itm.ids === 'object') {
+                chid = itm.ids.id || '';
+            }
+            if (!chid) chid = itm.id || '';
+
+            let url = itm.url || itm.play || '';
+            if (!url && chid) {
+                url = `https://vavoo.to/vavoo-iptv/play/${chid}`;
+            } else if (url && url.includes('/play/') && !url.includes('/vavoo-iptv/')) {
+                url = url.replace(/^https?:\/\/[^\/]+\/play\//, 'https://vavoo.to/vavoo-iptv/play/');
+            }
+            if (!url) continue;
+
+            let logo = '';
+            if (itm.images && typeof itm.images === 'object') {
+                logo = itm.images.logo || itm.images.poster || '';
+            }
+            if (!logo) logo = itm.logo || itm.poster || '';
+
+            let tvg = '';
+            if (itm.ids && typeof itm.ids === 'object') {
+                tvg = itm.ids.tvg || '';
+            }
+
+            channels.push({
+                name: name,
+                url: url,
+                group: resolvedGroup,
+                logo: logo,
+                tvg_id: tvg,
+            });
+        }
+
+        cursor = data.nextCursor || 0;
+        if (!cursor) break;
+    }
+    return channels;
 }
 
-function toStreamUrl(item) {
-  const vavooId = item.ids?.id || item.id;
-  if (!vavooId) return "";
+// ============================================================
+//  M3U ÜRETİMİ
+// ============================================================
+function buildM3u(channels, proxies) {
+    let out = ["#EXTM3U"];
+    out.push(`#EXT-X-USER-AGENT:${UA}`);
+    out.push("#EXT-X-REFERER:https://vavoo.to/");
+    out.push("#EXT-X-ORIGIN:https://vavoo.to");
 
-  const targetUrl = `https://vavoo.to/vavoo-iptv/play/${vavooId}`;
-  const numProxies = PROXY_LIST.length;
+    const proxyCount = proxies.length;
+    let proxyIndex = 0;
 
-  if (numProxies > 0) {
-    const currentProxy = PROXY_LIST[proxyIndex % numProxies];
-    proxyIndex = (proxyIndex + 1) % numProxies;
+    for (const ch of channels) {
+        const logo = ch.logo ? ` tvg-logo="${ch.logo}"` : '';
+        const tvg = ch.tvg_id ? ` tvg-id="${ch.tvg_id}"` : '';
+        
+        out.push(`#EXTINF:-1${tvg} tvg-name="${ch.name}"${logo} group-title="${ch.group}",${ch.name}`);
+        
+        const activeProxy = proxies[proxyIndex % proxyCount];
+        proxyIndex++;
 
-    return `${currentProxy}/?url=${encodeURIComponent(targetUrl)}&master&transport=http&.m3u8`;
-  }
-
-  return targetUrl;
+        out.push(`${activeProxy.replace(/\/+$/, '')}/?url=${encodeURIComponent(ch.url)}&master&transport=http&.m3u8`);
+    }
+    return out.join("\n") + "\n";
 }
 
-function deduplicateItems(items) {
-  const seen = new Set();
-  return items.filter((item) => {
-    if (!item || item.type !== "iptv" || !item.url) return false;
-    const vavooId = item.ids?.id || item.id;
-    if (!vavooId) return false;
-    
-    if (seen.has(item.url)) return false;
-    seen.add(item.url);
-    return true;
-  });
-}
+// ============================================================
+//  ANA İŞLEM
+// ============================================================
+(async () => {
+    const sig = await getSignature();
+    if (!sig) {
+        console.error("Hata: İmza alınamadı!");
+        process.exit(1);
+    }
 
-function toM3U(items) {
-  const lines = ["#EXTM3U"];
-  for (const it of items) {
-    const rawName = it.name ?? "Bilinmeyen Kanal";
-    const cleanName = cleanChannelName(rawName);
-    if (!cleanName) continue;
+    let allChannels = [];
+    for (const g of DEFAULT_GROUPS) {
+        const groupChannels = await fetchCatalogGroup(g, sig);
+        allChannels = allChannels.concat(groupChannels);
+    }
 
-    const vavooId = it.ids?.id || it.id || "";
-    const logo = it.logo ? ` tvg-logo="${escapeAttr(it.logo)}"` : "";
-    const rawGroup = it.group ?? "";
-    const group = (rawGroup.toLowerCase() === "turkey" || !rawGroup) 
-      ? categorize(cleanName) 
-      : rawGroup;
-      
-    const streamUrl = toStreamUrl(it);
-    if (!streamUrl) continue;
+    if (allChannels.length === 0) {
+        console.error("Hata: Kanal bulunamadı!");
+        process.exit(1);
+    }
 
-    lines.push(
-      `#EXTINF:-1 tvg-id="${escapeAttr(vavooId)}" tvg-name="${escapeAttr(cleanName)}" group-title="${escapeAttr(group)}"${logo},${cleanName}`
-    );
-    lines.push(streamUrl);
-  }
-  lines.push("");
-  return lines.join("\n");
-}
+    const m3uContent = buildM3u(allChannels, workerProxies);
 
-async function main() {
-  console.log(`Veri çekiliyor: ${CATALOG_URL} ...`);
-  console.log(`Algılanan ve Kullanılacak Aktif Proxy Sayısı: ${PROXY_LIST.length}`);
-
-  const rawItems = await fetchAll();
-  console.log(`Toplam ham kanal sayısı: ${rawItems.length}`);
-
-  const items = deduplicateItems(rawItems);
-  if (rawItems.length !== items.length) {
-    console.log(`Mükerrer yayınlar temizlendi. Kalan kanal sayısı: ${items.length}`);
-  }
-
-  const m3u = toM3U(items);
-  await fs.writeFile(M3U_FILE, m3u, "utf8");
-  console.log(`Başarıyla oluşturuldu: ${M3U_FILE} (${items.length} kanal)`);
-}
-
-main().catch((err) => {
-  console.error("Kritik Hata:", err);
-  process.exit(1);
-});
+    // Çıktıyı nernur.txt dosyasına yaz
+    fs.writeFileSync(OUTPUT_FILE, m3uContent, 'utf-8');
+    console.log(`Başarılı! ${allChannels.length} kanal işlendi ve '${OUTPUT_FILE}' dosyasına kaydedildi.`);
+})();
