@@ -1,40 +1,25 @@
 name: Nernur Güncelle
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'
   workflow_dispatch:
-
-permissions: write-all
+  schedule:
+    - cron: '0 */6 * * *' # İhtiyacınıza göre çalışma sıklığını ayarlayabilirsiniz
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 'ubuntu-latest' yerine sürüm sabitlendi, uyarı ortadan kalkar
 
     steps:
-      - name: Repoyu Çek
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Node.js Kur
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
 
-      - name: Bağımlılıkları Yükle (Axios)
+      - name: Install dependencies
         run: npm install axios
 
-      - name: Scripti Çalıştır
+      - name: Run update script
         run: node balkica.js
-        env:
-          PROXY_BASE: ${{ secrets.PROXY_BASE }}
-
-      - name: Değişiklik Varsa Commit et ve Pushla
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add nernur.txt
-          git commit -m "Güncelleme: ($(date -u +'%Y-%m-%d %H:%M UTC'))" || echo "Değişiklik yok"
-          git pull --rebase origin main
-          git push origin main
