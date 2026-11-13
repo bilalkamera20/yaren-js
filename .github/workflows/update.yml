@@ -3,11 +3,15 @@ name: Nernur Güncelle
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # İhtiyacınıza göre çalışma sıklığını ayarlayabilirsiniz
+    - cron: '0 */6 * * *'
 
 jobs:
   build:
-    runs-on: ubuntu-24.04 # 'ubuntu-latest' yerine sürüm sabitlendi, uyarı ortadan kalkar
+    runs-on: ubuntu-24.04
+
+    # Git işlemleri için gerekli izinler
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -23,3 +27,10 @@ jobs:
 
       - name: Run update script
         run: node balkica.js
+
+      - name: Commit and push changes if nernur.txt updated
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add nernur.txt
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Otomatik nernur.txt güncellemesi [skip ci]" && git push)
