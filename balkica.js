@@ -292,10 +292,6 @@ async function fetchCatalogGroup(group, signature) {
 // ============================================================
 function buildM3u(channels, proxies) {
     let out = ["#EXTM3U"];
-    out.push(`#EXT-X-USER-AGENT:${UA}`);
-    out.push("#EXT-X-REFERER:https://vavoo.to/");
-    out.push("#EXT-X-ORIGIN:https://vavoo.to");
-
     const proxyCount = proxies.length;
     let proxyIndex = 0;
 
