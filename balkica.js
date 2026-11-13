@@ -97,7 +97,7 @@ async function httpPost(url, payload, extraHeaders = {}) {
                 ...extraHeaders
             },
             timeout: 20000,
-            validateStatus: () => true // Tüm HTTP kodlarını yakalamak için
+            validateStatus: () => true
         });
 
         return {
@@ -137,7 +137,7 @@ async function getSignature() {
     for (const u of PING_URLS) {
         const r = await httpPost(u, payload);
         if (r.ok && r.body) {
-            const d = typeof r.body === 'object' ? r.body : JSON.parse(r.body);
+            const d = typeof r.body === 'object' ? r.body : JSON.parse(JSON.stringify(r.body));
             const sig = d.sig || d.addonSig || d.signature || d.token || null;
             if (sig) { return sig; }
         }
@@ -234,7 +234,7 @@ async function fetchCatalogGroup(group, signature) {
         const r = await httpPost(CATALOG_URL, payload, { 'mediahubmx-signature': signature });
         if (!r.ok) break;
 
-        const data = typeof r.body === 'object' ? r.body : JSON.parse(r.body);
+        const data = typeof r.body === 'object' ? r.body : JSON.parse(JSON.stringify(r.body));
         if (!data || typeof data !== 'object') break;
 
         const items = data.items || [];
